@@ -1,0 +1,31 @@
+{
+	"name": "server",
+	"version": "1.0.0",
+	"main": "handler.js",
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1",
+		"postinstall": "sls dynamodb install",
+		"start": "sls dynamodb start & sls offline",
+		"deploy": "sls deploy"
+	},
+	"dependencies": {
+		"apollo-server-lambda": "^2.9.3",
+		"graphql": "^14.3.0",
+		"graphql-subscriptions": "^1.1.0",
+		"uuid": "^3.3.3"
+	},
+	"devDependencies": {
+		"@babel/core": "^7.6.0",
+		"@babel/preset-env": "^7.6.0",
+		"aws-sdk": "^2.524.0",
+		"babel-loader": "^8.0.6",
+		"babel-plugin-source-map-support": "^2.1.1",
+		"clean-terminal-webpack-plugin": "^2.0.5",
+		"friendly-errors-webpack-plugin": "^1.7.0",
+		"serverless-dynamodb-local": "^0.2.38",
+		"serverless-offline": "^5.10.1",
+		"serverless-webpack": "^5.3.1",
+		"webpack": "^4.39.1",
+		"webpack-node-externals": "^1.7.2"
+	}
+}

@@ -1,0 +1,38 @@
+{
+	"extends": "react-app",
+	"env": {
+		"browser": true,
+		"node": true,
+		"es6": true
+	},
+	"globals": {
+		"nconf": true
+	},
+	"parser": "babel-eslint",
+	"plugins": ["react"],
+
+	"parserOptions": {
+		"ecmaVersion": 6,
+		"sourceType": "module",
+	},
+	"rules": {
+		"indent": [
+			"error",
+			"tab",
+			{ "SwitchCase": 1 }
+		],
+		"linebreak-style": [
+			"error",
+			"unix"
+		],
+		"quotes": [
+			"error",
+			"single"
+		],
+		"semi": [
+			"error",
+			"never"
+		],
+		"no-console": "error"
+	}
+}

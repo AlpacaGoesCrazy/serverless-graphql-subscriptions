@@ -1,0 +1,204 @@
+service: serverless-subscriptions
+
+plugins:
+  - serverless-webpack
+  - serverless-dynamodb-local
+  - serverless-offline
+
+provider:
+  name: aws
+  runtime: nodejs8.10
+  region: eu-west-1
+  stage: ${opt:stage, 'dev'}
+  environment:
+    PUBLISH_ENDPOINT: !Join
+        - ''
+        - - 'https://'
+          - !Ref WebsocketsApi
+          - '.execute-api.${self:provider.region}.amazonaws.com/${self:provider.stage}/'
+    TOPICS_TABLE: 'TOPIC_SUBSCRIBERS'
+    EVENTS_TABLE: 'SUBSCRIPTION_EVENTS'
+    
+
+
+package:
+  individually: true
+
+custom:
+  webpack:
+    webpackConfig: 'webpack.config.js'
+    includeModules:
+      packagePath: './package.json'
+  dynamodb:
+    stages:
+      - dev
+    start:
+      port: 8000
+      inMemory: true
+      heapInitial: 200m
+      heapMax: 1g
+      migrate: true
+      convertEmptyValues: true
+ 
+
+functions:
+  graphql:
+    handler: src/graphql.handler
+    role: role
+    events:
+        - http:
+            path: graphql
+            method: POST
+            cors:
+              origins:
+                  - '*'
+  websocket:
+    handler: src/websocket.handler
+    role: role
+    events:
+      - websocket: 
+         route: $connect
+      - websocket: 
+         route: $disconnect
+      - websocket: 
+         route: $default
+  publish:
+    handler: src/publish.handler
+    role: role
+    events:
+      - stream:
+          type: dynamodb
+          batchSize: 1
+          startingPosition: LATEST
+          arn: !GetAtt
+            - subscriptionEventsTable
+            - StreamArn
+
+resources:
+  Resources:
+    topicSubscribersTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.TOPICS_TABLE}
+        ProvisionedThroughput: 
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+        AttributeDefinitions:
+          - AttributeName: topic
+            AttributeType: S
+          - AttributeName: connectionId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: topic
+            KeyType: HASH
+          - AttributeName: connectionId
+            KeyType: RANGE
+        TimeToLiveSpecification:
+          AttributeName: 'ttl'
+          Enabled: true
+        GlobalSecondaryIndexes:
+          - 
+            IndexName: reverse
+            KeySchema:
+              - AttributeName: connectionId
+                KeyType: HASH
+              - AttributeName: topic
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+            ProvisionedThroughput: 
+              ReadCapacityUnits: 1
+              WriteCapacityUnits: 1
+
+    subscriptionEventsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.EVENTS_TABLE}
+        ProvisionedThroughput: 
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+        AttributeDefinitions:
+          - AttributeName: topic
+            AttributeType: S
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: topic
+            KeyType: HASH
+          - AttributeName: id
+            KeyType: RANGE
+        StreamSpecification:
+          StreamViewType: NEW_IMAGE
+
+    role:
+      Type: 'AWS::IAM::Role'
+      Properties:
+        RoleName: ${self:service}-role
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                  - lambda.amazonaws.com
+              Action: 'sts:AssumeRole'
+        Policies:
+          - PolicyName: logLambda
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - 'logs:CreateLogGroup'
+                    - 'logs:CreateLogStream'
+                    - 'logs:PutLogEvents'
+                  Resource: !Join
+                    - ''
+                    - - 'arn:aws:logs:${self:provider.region}:'
+                      - !Ref 'AWS::AccountId'
+                      - ':log-group:/aws/lambda/*:*:*'
+          - PolicyName: useDynamoDb
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - 'dynamodb:GetItem'
+                    - 'dynamodb:PutItem'
+                    - 'dynamodb:BatchWriteItem'
+                    - 'dynamodb:Query'
+                  Resource:
+                    - !GetAtt subscriptionEventsTable.Arn
+                    - !GetAtt topicSubscribersTable.Arn
+                    - !Join
+                      - ''
+                      - - !GetAtt topicSubscribersTable.Arn
+                        - '/index/reverse'
+          - PolicyName: accessDDBStream
+            PolicyDocument:
+                Version: '2012-10-17'
+                Statement:
+                  - Effect: Allow
+                    Action:
+                      - dynamodb:DescribeStream
+                      - dynamodb:GetRecords
+                      - dynamodb:GetShardIterator
+                      - dynamodb:ListStreams
+                    Resource: !GetAtt subscriptionEventsTable.StreamArn
+          - PolicyName: publishToConnectedClients
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - 'execute-api:Invoke'
+                    - 'execute-api:ManageConnections'
+                  Resource: !Join
+                    - ''
+                    - - 'arn:aws:execute-api:${self:provider.region}:'
+                      - !Ref 'AWS::AccountId'
+                      - ':'
+                      - !Ref WebsocketsApi
+                      - '/${self:provider.stage}/*'
+
+
