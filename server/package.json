@@ -17,7 +17,7 @@
 	"devDependencies": {
 		"@babel/core": "^7.6.0",
 		"@babel/preset-env": "^7.6.0",
-		"aws-sdk": "^2.524.0",
+		"aws-sdk": "^2.814.0",
 		"babel-loader": "^8.0.6",
 		"babel-plugin-source-map-support": "^2.1.1",
 		"clean-terminal-webpack-plugin": "^2.0.5",
